@@ -44,7 +44,7 @@ func (l *defaultLogger) Log(keyvals ...interface{}) {
 	if s {
 		dist += "=null"
 	}
-	l.Output(calldepth, header(color("XLOG",blue), dist))
+	l.Output(calldepth, header(color("LOG",blue), dist))
 }
 
 func (l *defaultLogger) Debug(v ...interface{}) {
