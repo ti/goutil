@@ -12,6 +12,15 @@ func Marshal(v interface{}) (b []byte, e error){
 	return
 }
 
+func MustMarshal(v interface{}) []byte{
+	if b, err := Marshal(v); err != nil {
+		panic(err)
+	} else {
+		return b
+	}
+}
+
+
 
 func Unmarshal(data []byte, v interface{}) error {
 	return  gob.NewDecoder(bytes.NewReader(data)).Decode(v)
