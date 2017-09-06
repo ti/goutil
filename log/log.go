@@ -10,8 +10,7 @@ const (
 )
 
 
-
-var l Logger = &defaultLogger{log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile)}
+var l Logger = &defaultLogger{log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)}
 
 type Logger interface {
 	Log(keyvals ...interface{})

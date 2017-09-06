@@ -29,7 +29,6 @@ type defaultLogger struct {
 	*log.Logger
 }
 
-
 func (l *defaultLogger) Log(keyvals ...interface{}) {
 	var dist string
 	var s bool
