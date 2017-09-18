@@ -65,12 +65,10 @@ func (this *SqlSearch) ToSql() *SqlQuery {
 				default:
 					selectStr += this.KeyAlias(v)
 				}
-
 			}
 			sq.Select = selectStr
 		}
 	}
-
 	if qSort := this.UrlValues.Get("sort"); qSort != "" {
 		var searchSort []string
 		if err := json.Unmarshal([]byte(qSort), &searchSort); err == nil {

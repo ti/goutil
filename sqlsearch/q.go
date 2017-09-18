@@ -21,16 +21,39 @@ var mg2SqlGroup = map[string]struct {
 	"$in":     {1, "IN"},
 	"$nin":    {1, "NOT IN"},
 	"$exists": {2, "IS NOT NULL"},
+	"$and": {3, "AND"},
+	"$or": {3, "OR"},
 }
+
 
 func Q2Sql(queryStr string, timeLocal *time.Location, getKey func(k string) string) string {
 	var query OrderedMap
 	if err := json.Unmarshal([]byte(queryStr), &query); err != nil {
 		return ""
 	}
+	return map2Sql(query, "AND", timeLocal, getKey)
+}
+
+
+func map2Sql(query OrderedMap, condition string, timeLocal *time.Location, getKey func(k string) string) (ret string) {
+	var extraSql string
+	var extraCondtion string
 	var wheres []string
 	for _, key := range query.Keys() {
 		value := query.MustGet(key)
+		if strings.HasPrefix(key, "$") {
+			if v, ok := value.(OrderedMap); ok {
+				if val, ok := mg2SqlGroup[key]; ok {
+					if extraSql != "" {
+						extraSql += " " + val.Sql +  " " + map2Sql(v, val.Sql, timeLocal, getKey)
+					} else {
+						extraCondtion = val.Sql
+						extraSql = map2Sql(v, val.Sql, timeLocal, getKey)
+					}
+				}
+			}
+			continue
+		}
 		if stringValue, ok := value.(string); ok {
 			if strings.HasPrefix(stringValue, "/") && strings.HasSuffix(stringValue, "/") {
 				v := stringValue[1:len(stringValue)-1]
@@ -86,8 +109,18 @@ func Q2Sql(queryStr string, timeLocal *time.Location, getKey func(k string) stri
 			wheres = append(wheres, getKey(key)+" = "+toSqlString(value, nil))
 		}
 	}
-	return strings.Join(wheres, " AND ")
+	if len(wheres) == 0 {
+		return extraSql
+	} else {
+		whereSql := strings.Join(wheres, " " +  condition + " ")
+		if extraSql != "" {
+			return whereSql + ` ` + extraCondtion +  ` ` + extraSql
+		}
+		return whereSql
+	}
 }
+
+
 
 func toSqlString(v interface{}, timeLocal *time.Location) (result string) {
 	switch t := v.(type) {
