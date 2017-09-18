@@ -54,11 +54,18 @@ func (this *SqlSearch) ToSql() *SqlQuery {
 				if i > 0 {
 					selectStr += ","
 				}
-				if strings.HasPrefix(v, "-") {
-					selectStr = ""
+				if len(v) < 2 {
 					continue
 				}
-				selectStr += this.KeyAlias(v)
+				switch  v[:1] {
+				case "-":
+					continue
+				case "$":
+					selectStr += ("DISTINCT(" + this.KeyAlias(v[1:]) + ")")
+				default:
+					selectStr += this.KeyAlias(v)
+				}
+
 			}
 			sq.Select = selectStr
 		}
