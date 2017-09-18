@@ -75,9 +75,6 @@ func main() {
 
 	log.Println(where)
 
-	return
-
-
 
 	q := sqlsearch.New(uriQuery,local, func(key string) string {
 		return "EZ_DEVICE." + key
