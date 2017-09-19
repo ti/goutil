@@ -36,19 +36,19 @@ func Q2Sql(queryStr string, timeLocal *time.Location, getKey func(k string) stri
 
 
 func map2Sql(query OrderedMap, condition string, timeLocal *time.Location, getKey func(k string) string) (ret string) {
-	var extraSql string
-	var extraCondtion string
-	var wheres []string
+	var where string
 	for _, key := range query.Keys() {
 		value := query.MustGet(key)
 		if strings.HasPrefix(key, "$") {
 			if v, ok := value.(OrderedMap); ok {
 				if val, ok := mg2SqlGroup[key]; ok {
-					if extraSql != "" {
-						extraSql += " " + val.Sql +  " " + map2Sql(v, val.Sql, timeLocal, getKey)
+
+					var extra = map2Sql(v, val.Sql, timeLocal, getKey)
+
+					if where == "" {
+						where = extra
 					} else {
-						extraCondtion = val.Sql
-						extraSql = map2Sql(v, val.Sql, timeLocal, getKey)
+						where += " " + condition + " (" + extra + ")"
 					}
 				}
 			}
@@ -57,12 +57,12 @@ func map2Sql(query OrderedMap, condition string, timeLocal *time.Location, getKe
 		if stringValue, ok := value.(string); ok {
 			if strings.HasPrefix(stringValue, "/") && strings.HasSuffix(stringValue, "/") {
 				v := stringValue[1:len(stringValue)-1]
-				wheres = append(wheres, getKey(key)+" LIKE '%"+v+"%'")
+				where = appendWhere(where,condition, getKey(key)+" LIKE '%"+v+"%'")
 			} else {
 				if tm, err := time.Parse(time.RFC3339, value.(string)); err == nil {
-					wheres = append(wheres, getKey(key)+" = '"+tm.In(timeLocal).Format("2006-01-02 15:04:05")+"'")
+					where = appendWhere(where,  condition, getKey(key)+" = '"+tm.In(timeLocal).Format("2006-01-02 15:04:05")+"'")
 				} else {
-					wheres = append(wheres, getKey(key)+" = '"+stringValue+"'")
+					where = appendWhere(where,  condition, getKey(key)+" = '"+stringValue+"'")
 				}
 			}
 		} else if mapValue, ok := value.(OrderedMap); ok {
@@ -75,7 +75,7 @@ func map2Sql(query OrderedMap, condition string, timeLocal *time.Location, getKe
 					case 0:
 						conValue := toSqlString(v, timeLocal)
 						if conValue != "" {
-							wheres = append(wheres, getKey(key)+" "+grp.Sql+" "+conValue)
+							where = appendWhere(where,  condition, getKey(key)+" "+grp.Sql+" "+conValue)
 						}
 					case 1:
 						var inValue string
@@ -88,15 +88,15 @@ func map2Sql(query OrderedMap, condition string, timeLocal *time.Location, getKe
 							}
 						}
 						if inValue != "" {
-							wheres = append(wheres, getKey(key)+" "+grp.Sql+" ("+inValue+")")
+							where = appendWhere(where,  condition, getKey(key)+" "+grp.Sql+" ("+inValue+")")
 						}
 					case 2:
 						if k == "$exists" {
 							if exists, ok := v.(bool); ok {
 								if exists {
-									wheres = append(wheres, getKey(key)+" "+grp.Sql)
+									where = appendWhere(where,  condition, getKey(key)+" "+grp.Sql)
 								} else {
-									wheres = append(wheres, getKey(key)+" IS NULL")
+									where = appendWhere(where,  condition, getKey(key)+" IS NULL")
 								}
 							}
 						}
@@ -106,21 +106,19 @@ func map2Sql(query OrderedMap, condition string, timeLocal *time.Location, getKe
 				}
 			}
 		} else {
-			wheres = append(wheres, getKey(key)+" = "+toSqlString(value, nil))
+			where = appendWhere(where, condition, getKey(key)+" = "+toSqlString(value, nil))
 		}
 	}
-	if len(wheres) == 0 {
-		return extraSql
-	} else {
-		whereSql := strings.Join(wheres, " " +  condition + " ")
-		if extraSql != "" {
-			return whereSql + ` ` + extraCondtion +  ` ` + extraSql
-		}
-		return whereSql
-	}
+
+	return where
 }
 
-
+func appendWhere(src string,condition string, elem string) string {
+	if src != "" {
+		return src + " " + condition +  " " + elem
+	}
+	return elem
+}
 
 func toSqlString(v interface{}, timeLocal *time.Location) (result string) {
 	switch t := v.(type) {

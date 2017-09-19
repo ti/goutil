@@ -8,49 +8,11 @@ import (
 )
 
 var js = `{
-  "name": "李南希",
-  "desc": "/南希/",
-  "$or": {
-    "name": "李南希",
-    "desc": "/南希/",
-    "created_at": {
-      "$gte": "2010-05-18T00:00:00+08:00",
-      "$lt": "2018-09-18T19:00:00+08:00"
-    },
-    "index": {
-      "$gt": 0,
-      "$lt": 99,
-      "$ne": 3
-    },
-    "index2": {
-      "$eq": 1
-    },
-    "test": {
-      "$exists": false
-    },
-    "test2": {
-      "$exists": true
-    },
-    "tags": {
-      "$in": [
-        "appliances",
-        "school"
-      ]
-    },
-    "baby": {
-      "$nin": [
-        "ok",
-        "not_ok"
-      ]
-    },
-    "age": {
-      "$in": [
-        1,
-        2,
-        3
-      ]
-    }
-  }
+  "xname": "/xxx/",
+ "$or": {
+    "name": "/测试/",
+    "activate_factory":"spotmau"
+ }
 }`
 
 func main() {
@@ -74,7 +36,6 @@ func main() {
 	})
 
 	log.Println(where)
-
 
 	q := sqlsearch.New(uriQuery,local, func(key string) string {
 		return "EZ_DEVICE." + key
