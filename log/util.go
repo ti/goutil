@@ -4,6 +4,7 @@ import (
 	"os"
 	"io"
 	"path/filepath"
+	"log"
 )
 
 func EmpWriter()  *empWriter {
@@ -26,6 +27,13 @@ func SetDefaultLoggerOutput(logPath string) (err error) {
 	stdLog.SetOutput(outPut)
 	return nil
 }
+
+func NewDefaultLogger(out io.Writer) *defaultLogger {
+	return &defaultLogger{
+		log.New(out, "", log.LstdFlags|log.Lshortfile),
+	}
+}
+
 
 func NewFileLogOutput(logPath string) (file *os.File, err error) {
 	fileDir := filepath.Dir(logPath)
