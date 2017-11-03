@@ -20,7 +20,9 @@ func MustMarshal(v interface{}) []byte{
 	}
 }
 
+func Get(value )  {
 
+}
 
 func Unmarshal(data []byte, v interface{}) error {
 	return  gob.NewDecoder(bytes.NewReader(data)).Decode(v)

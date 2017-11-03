@@ -11,6 +11,7 @@ import (
 var (
 	SHARD_COUNT = 32
 	CLEAN_TTL_AFTER_MAX_KEY = 1000
+
 	maxCleanDuration = 2 * time.Hour
 	nextCleanTime time.Time
 )
