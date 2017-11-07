@@ -5,6 +5,7 @@ import (
 	"io"
 	"path/filepath"
 	"log"
+	"sync"
 )
 
 func EmpWriter()  *empWriter {
@@ -17,14 +18,36 @@ func (w *empWriter) Write(b []byte) (n int, err error) {
 	return
 }
 
-var outPut *os.File
+var out = &outPut{mu: sync.Mutex{},realOut:os.Stdout}
 
-func SetDefaultLoggerOutput(logPath string) (err error) {
-	outPut, err = NewFileLogOutput(logPath)
+type outPut struct {
+	mu     sync.Mutex // ensures atomic writes; protects the following fields
+	realOut io.Writer
+}
+
+func (o *outPut) Write(p []byte) (n int, err error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.realOut.Write(p)
+}
+
+func (o *outPut) SetWrite(w io.Writer) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	 o.realOut = w
+}
+
+
+type Writer interface {
+	Write(p []byte) (n int, err error)
+}
+
+func SetDefaultFileOutPut(filePath string) (err error) {
+	outPutFile, err := NewFileLogOutput(filePath)
 	if err != nil {
 		return err
 	}
-	stdLog.SetOutput(outPut)
+	out.SetWrite(outPutFile)
 	return nil
 }
 
@@ -33,7 +56,6 @@ func NewDefaultLogger(out io.Writer) *defaultLogger {
 		log.New(out, "", log.LstdFlags|log.Lshortfile),
 	}
 }
-
 
 func NewFileLogOutput(logPath string) (file *os.File, err error) {
 	fileDir := filepath.Dir(logPath)
@@ -46,8 +68,5 @@ func NewFileLogOutput(logPath string) (file *os.File, err error) {
 }
 
 func GetDefaultLoggerOutput() io.Writer {
-	if outPut != nil {
-		return outPut
-	}
-	return os.Stdout
+	return out
 }
