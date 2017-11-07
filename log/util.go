@@ -51,6 +51,12 @@ func SetDefaultFileOutPut(filePath string) (err error) {
 	return nil
 }
 
+func SetDefaultOutput(o io.Writer) (err error) {
+	out.SetWrite(o)
+	return nil
+}
+
+
 func NewDefaultLogger(out io.Writer) *defaultLogger {
 	return &defaultLogger{
 		log.New(out, "", log.LstdFlags|log.Lshortfile),
