@@ -7,7 +7,6 @@ import (
 	"os"
 )
 
-
 const (
 	black colorAttribute = iota + 30
 	red
@@ -19,10 +18,16 @@ const (
 	white
 )
 
+var ColorAble bool
+
 type colorAttribute int
 
 func color(s string, c colorAttribute) string{
-	return fmt.Sprintf("\u001b[%vm%s \u001b[0m",c,s)
+	if ColorAble {
+		return fmt.Sprintf("\u001b[%vm%s \u001b[0m",c,s)
+	} else {
+		return s
+	}
 }
 
 type defaultLogger struct {
