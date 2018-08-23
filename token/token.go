@@ -25,18 +25,19 @@ func NewEncoding(secret string) *Encoding {
 	if len(secret) == 0 {
 		return &Encoding{}
 	}
-	cipher, err := rc4.NewCipher([]byte(secret))
+	sec := []byte(secret)
+	decoder, err := rc4.NewCipher(sec)
 	if err != nil {
 		panic(err)
 	}
-	ciphere, err := rc4.NewCipher([]byte(secret))
+	encoder, err := rc4.NewCipher(sec)
 	if err != nil {
 		panic(err)
 	}
 	return &Encoding{
 		withSecret: true,
-		dconder:    cipher,
-		encoder:    ciphere,
+		dconder:    decoder,
+		encoder:    encoder,
 	}
 }
 
@@ -73,16 +74,16 @@ func (e *Encoding) Decode(s string) (userID int64, meta interface{}, expires tim
    t is the type of meta
 */
 func (e *Encoding) encodeBytes(userID int64, meta interface{}, expires time.Time) []byte {
-	src := make([]byte, 18)
+	src := make([]byte, 17)
 	user := big.NewInt(userID).Bytes()
 	if len(user) > 5 {
 		panic("user number is too big for big.NewInt(userID).Bytes()")
 	}
 	objectID := NewObjectIDWithTime(expires)
 	for i, v := range objectID {
-		src[i+1] = v
+		src[i] = v
 	}
-	start := 13 + (5 - len(user))
+	start := 12 + (5 - len(user))
 	for i, v := range user {
 		src[start+i] = v
 	}
@@ -94,11 +95,14 @@ func (e *Encoding) encodeBytes(userID int64, meta interface{}, expires time.Time
 		src = append(src, b...)
 	}
 	if !e.withSecret {
+		//add version
+		src = append([]byte{0}, src...)
 		return src
 	}
 	dst := make([]byte, len(src))
 	e.encoder.XORKeyStream(dst, src)
-	return src
+	dst = append([]byte{0}, dst...)
+	return dst
 }
 
 func (e *Encoding) decodeBytes(dst []byte) (userID int64, meta interface{}, expires time.Time, err error) {
@@ -108,17 +112,19 @@ func (e *Encoding) decodeBytes(dst []byte) (userID int64, meta interface{}, expi
 	if len(dst) < 18 {
 		err = errors.New("invalidate token size")
 	}
-	objectID := ObjectID(dst[1:13])
-	expires = objectID.Time()
+	dst = dst[1:]
 	if e.withSecret {
-		dst := make([]byte, len(dst))
-		e.dconder.XORKeyStream(dst, dst)
+		src := make([]byte, len(dst))
+		e.dconder.XORKeyStream(src, dst)
+		dst = src
 	}
-	number := dst[13:18]
+	objectID := ObjectID(dst[0:12])
+	expires = objectID.Time()
+	number := dst[12:17]
 	var bigNubmer = big.Int{}
 	bigNubmer.SetBytes(number)
 	userID = bigNubmer.Int64()
-	meta = bytesToInterface(dst[18:])
+	meta = bytesToInterface(dst[17:])
 	return
 }
 
