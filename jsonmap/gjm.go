@@ -146,6 +146,7 @@ func GetProperty(originalData map[string]interface{}, path string, separatorArr 
 
 	data := make(map[string]interface{})
 	d := reflect.ValueOf(originalData)
+
 	for _, key := range d.MapKeys() {
 		data[key.String()] = d.MapIndex(key).Interface()
 	}
