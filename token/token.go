@@ -89,7 +89,7 @@ func (e *Encoding) encodeBytes(userID int64, meta interface{}, expires time.Time
 	}
 	if meta != nil {
 		b := interfaceToBytes(meta)
-		if len(b) < 2 {
+		if len(b) < 1 {
 			panic(fmt.Sprintf("meta type %s unspport", reflect.TypeOf(meta)))
 		}
 		src = append(src, b...)
@@ -135,7 +135,8 @@ const (
 	idTypeByte         byte = 3
 	idTypeMap          byte = 4
 	idTypeIntMap       byte = 5
-	idTypeBase64String byte = 6
+	idTypeIntArray     byte = 6
+	idTypeBase64String byte = 7
 )
 
 func interfaceToBytes(src interface{}) (dst []byte) {
@@ -163,6 +164,14 @@ func interfaceToBytes(src interface{}) (dst []byte) {
 	case map[uint64]uint64:
 		dst = append(dst, idTypeIntMap)
 		dst = append(dst, intMapToBytes(s)...)
+	case []uint64:
+		dst = append(dst, idTypeIntArray)
+		for _, v := range s {
+			if len(dst) > 1 {
+				dst = append(dst, 255)
+			}
+			dst = append(dst, intToBytes(v, 254)...)
+		}
 	case map[string]string:
 		dst = append(dst, idTypeMap)
 		dst = append(dst, strMapToBytes(s)...)
@@ -173,7 +182,7 @@ func interfaceToBytes(src interface{}) (dst []byte) {
 }
 
 func bytesToInterface(dst []byte) (src interface{}) {
-	if len(dst) < 2 {
+	if len(dst) < 1 {
 		return nil
 	}
 	t := dst[0]
@@ -194,6 +203,20 @@ func bytesToInterface(dst []byte) (src interface{}) {
 		src = base64.RawURLEncoding.EncodeToString(dst[1:])
 	case idTypeIntMap:
 		src = bytesToIntMap(dst[1:])
+	case idTypeIntArray:
+		var numbers []uint64
+		b := dst[1:]
+		for len(b) > 0 {
+			m := bytes.IndexByte(b, 255)
+			if m < 0 {
+				numbers = append(numbers, bytesToInt(b, 254))
+				break
+			}
+			n := b[0:m]
+			numbers = append(numbers, bytesToInt(n, 254))
+			b = b[m+1:]
+		}
+		src = numbers
 	case idTypeMap:
 		src = bytesToStrMap(dst[1:])
 	}
