@@ -1,21 +1,22 @@
-// Package Token implements a base64 token from ObjectID
+// Package token implements a base64 token from ObjectID
 package token
 
 import (
-	"io"
-	"crypto/rand"
-	"fmt"
-	"encoding/binary"
-	"time"
-	"sync/atomic"
-	"crypto/rc4"
-	"crypto/md5"
-	"os"
-	"encoding/base64"
-	"math/big"
-	"errors"
-	"reflect"
 	"bytes"
+	"crypto/md5"
+	"crypto/rand"
+	"crypto/rc4"
+	"encoding/base64"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"math/big"
+	"os"
+	"reflect"
+	"sync/atomic"
+	"time"
 )
 
 // NewEncoding returns a new token Encoding defined by the given secret,
@@ -127,7 +128,6 @@ func (e *Encoding) decodeBytes(dst []byte) (userID int64, meta interface{}, expi
 	return
 }
 
-
 const (
 	idTypeInt64        byte = 0
 	idTypeInt          byte = 1
@@ -205,70 +205,30 @@ func intMapToBytes(m map[uint64]uint64) []byte {
 		return nil
 	}
 	var ret []byte
+	var sep byte = 255
 	for k, v := range m {
 		if len(ret) != 0 {
-			ret = append(ret, 0)
+			ret = append(ret, sep)
 		}
 		if k == 0 {
 			ret = append(ret, 0)
 		} else {
-			ret = append(ret, big.NewInt(int64(k)).Bytes()...)
+			ret = append(ret, intToBytes(k, 254)...)
 		}
-		ret = append(ret, 0)
+		ret = append(ret, sep)
 		if v == 0 {
 			ret = append(ret, 0)
 		} else {
-			ret = append(ret, big.NewInt(int64(v)).Bytes()...)
+			ret = append(ret, intToBytes(v, 254)...)
 		}
 	}
 	return ret
-}
-
-func strMapToBytes(m map[string]string) []byte {
-	if len(m) == 0 {
-		return nil
-	}
-	var ret []byte
-	for k, v := range m {
-		if len(ret) != 0 {
-			ret = append(ret, 0)
-		}
-		ret = append(ret, []byte(k)...)
-		ret = append(ret, 0)
-		ret = append(ret, []byte(v)...)
-	}
-	return ret
-}
-
-func bytesToStrMap(src []byte) map[string]string {
-	m := make(map[string]string)
-	query := src
-	var sep byte = 0
-	for len(query) != 0 {
-		var k, v []byte
-		if i := bytes.IndexByte(query, sep); i >= 0 {
-			k, query = query[:i], query[i+1:]
-		} else {
-			query = []byte{}
-		}
-		if len(query) == 0 {
-			continue
-		}
-		if i := bytes.IndexByte(query, sep); i >= 0 {
-			v, query = query[:i], query[i+1:]
-		} else {
-			v = query
-			query = []byte{}
-		}
-		m[string(k)] = string(v)
-	}
-	return m
 }
 
 func bytesToIntMap(src []byte) map[uint64]uint64 {
 	m := make(map[uint64]uint64)
 	query := src
-	var sep byte = 0
+	var sep byte = 255
 	for len(query) != 0 {
 		var k, v []byte
 		if i := bytes.IndexByte(query, sep); i >= 0 {
@@ -297,14 +257,85 @@ func bytesToIntMap(src []byte) map[uint64]uint64 {
 			v = query
 			query = []byte{}
 		}
-		var kInt, vInt uint64
+		var keyInt, valueInt uint64
 		if len(k) > 0 {
-			kInt = (&big.Int{}).SetBytes(k).Uint64()
+			keyInt = bytesToInt(k, 254)
 		}
 		if len(v) > 0 {
-			vInt = (&big.Int{}).SetBytes(v).Uint64()
+			valueInt = bytesToInt(v, 254)
 		}
-		m[kInt] = vInt
+		m[keyInt] = valueInt
+	}
+	return m
+}
+
+// decimal to any bytes less than 255
+func intToBytes(num uint64, base uint8) []byte {
+	var ret []byte
+	var remainder uint64
+	var remainderByte byte
+	var baseNum = uint64(base) + 1
+	for num != 0 {
+		remainder = num % baseNum
+		remainderByte = byte(remainder)
+		ret = append([]byte{remainderByte}, ret...)
+		num = num / baseNum
+	}
+	return ret
+}
+
+// []byte to nay  decimal
+func bytesToInt(num []byte, base uint8) uint64 {
+	if len(num) == 0 {
+		return 0
+	}
+	nNum := float64(len(num) - 1)
+	baseNum := float64(base) + 1
+	var ret float64
+	for _, value := range num {
+		ret = ret + float64(value)*math.Pow(baseNum, nNum)
+		nNum = nNum - 1
+	}
+	return uint64(ret)
+}
+
+func strMapToBytes(m map[string]string) []byte {
+	if len(m) == 0 {
+		return nil
+	}
+	var ret []byte
+	for k, v := range m {
+		if len(ret) != 0 {
+			ret = append(ret, 0)
+		}
+		ret = append(ret, []byte(k)...)
+		ret = append(ret, 0)
+		ret = append(ret, []byte(v)...)
+	}
+	return ret
+}
+
+func bytesToStrMap(src []byte) map[string]string {
+	m := make(map[string]string)
+	query := src
+	var sep byte
+	for len(query) != 0 {
+		var k, v []byte
+		if i := bytes.IndexByte(query, sep); i >= 0 {
+			k, query = query[:i], query[i+1:]
+		} else {
+			query = []byte{}
+		}
+		if len(query) == 0 {
+			continue
+		}
+		if i := bytes.IndexByte(query, sep); i >= 0 {
+			v, query = query[:i], query[i+1:]
+		} else {
+			v = query
+			query = []byte{}
+		}
+		m[string(k)] = string(v)
 	}
 	return m
 }
@@ -407,7 +438,7 @@ func (id ObjectID) String() string {
 	return base64.RawURLEncoding.EncodeToString(id)
 }
 
-// String ObjectID to base64 string
+// Bytes ObjectID to bytes
 func (id ObjectID) Bytes() []byte {
 	return []byte(id)
 }
