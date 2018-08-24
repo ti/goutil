@@ -16,7 +16,6 @@ import (
 	"errors"
 	"reflect"
 	"bytes"
-	"strings"
 )
 
 // NewEncoding returns a new token Encoding defined by the given secret,
@@ -128,13 +127,15 @@ func (e *Encoding) decodeBytes(dst []byte) (userID int64, meta interface{}, expi
 	return
 }
 
+
 const (
 	idTypeInt64        byte = 0
 	idTypeInt          byte = 1
 	idTypeString       byte = 2
 	idTypeByte         byte = 3
 	idTypeMap          byte = 4
-	idTypeBase64String byte = 5
+	idTypeIntMap       byte = 5
+	idTypeBase64String byte = 6
 )
 
 func interfaceToBytes(src interface{}) (dst []byte) {
@@ -159,22 +160,12 @@ func interfaceToBytes(src interface{}) (dst []byte) {
 	case []byte:
 		dst = append(dst, idTypeByte)
 		dst = append(dst, s...)
+	case map[uint64]uint64:
+		dst = append(dst, idTypeIntMap)
+		dst = append(dst, intMapToBytes(s)...)
 	case map[string]string:
-		var buf bytes.Buffer
-		for k, v := range s {
-			if strings.ContainsAny(k, "&=") {
-				panic(fmt.Sprintf("map key %s can not contains & or = ", k))
-			}
-			if strings.ContainsAny(k, "&=") {
-				panic(fmt.Sprintf("map value %s can not contains & or = ", k))
-			}
-			if buf.Len() > 0 {
-				buf.WriteByte('&')
-			}
-			buf.WriteString(k + "=" + v)
-		}
 		dst = append(dst, idTypeMap)
-		dst = append(dst, buf.Bytes()...)
+		dst = append(dst, strMapToBytes(s)...)
 	default:
 
 	}
@@ -201,28 +192,121 @@ func bytesToInterface(dst []byte) (src interface{}) {
 		src = dst[1:]
 	case idTypeBase64String:
 		src = base64.RawURLEncoding.EncodeToString(dst[1:])
+	case idTypeIntMap:
+		src = bytesToIntMap(dst[1:])
 	case idTypeMap:
-		m := make(map[string]string)
-		query := string(dst[1:])
-		for query != "" {
-			key := query
-			if i := strings.IndexRune(key, '&'); i >= 0 {
-				key, query = key[:i], key[i+1:]
-			} else {
-				query = ""
-			}
-			if key == "" {
-				continue
-			}
-			value := ""
-			if i := strings.IndexRune(key, '='); i >= 0 {
-				key, value = key[:i], key[i+1:]
-			}
-			m[key] = value
-		}
-		src = m
+		src = bytesToStrMap(dst[1:])
 	}
 	return
+}
+
+func intMapToBytes(m map[uint64]uint64) []byte {
+	if len(m) == 0 {
+		return nil
+	}
+	var ret []byte
+	for k, v := range m {
+		if len(ret) != 0 {
+			ret = append(ret, 0)
+		}
+		if k == 0 {
+			ret = append(ret, 0)
+		} else {
+			ret = append(ret, big.NewInt(int64(k)).Bytes()...)
+		}
+		ret = append(ret, 0)
+		if v == 0 {
+			ret = append(ret, 0)
+		} else {
+			ret = append(ret, big.NewInt(int64(v)).Bytes()...)
+		}
+	}
+	return ret
+}
+
+func strMapToBytes(m map[string]string) []byte {
+	if len(m) == 0 {
+		return nil
+	}
+	var ret []byte
+	for k, v := range m {
+		if len(ret) != 0 {
+			ret = append(ret, 0)
+		}
+		ret = append(ret, []byte(k)...)
+		ret = append(ret, 0)
+		ret = append(ret, []byte(v)...)
+	}
+	return ret
+}
+
+func bytesToStrMap(src []byte) map[string]string {
+	m := make(map[string]string)
+	query := src
+	var sep byte = 0
+	for len(query) != 0 {
+		var k, v []byte
+		if i := bytes.IndexByte(query, sep); i >= 0 {
+			k, query = query[:i], query[i+1:]
+		} else {
+			query = []byte{}
+		}
+		if len(query) == 0 {
+			continue
+		}
+		if i := bytes.IndexByte(query, sep); i >= 0 {
+			v, query = query[:i], query[i+1:]
+		} else {
+			v = query
+			query = []byte{}
+		}
+		m[string(k)] = string(v)
+	}
+	return m
+}
+
+func bytesToIntMap(src []byte) map[uint64]uint64 {
+	m := make(map[uint64]uint64)
+	query := src
+	var sep byte = 0
+	for len(query) != 0 {
+		var k, v []byte
+		if i := bytes.IndexByte(query, sep); i >= 0 {
+			if i == 0 {
+				query = query[i+2:]
+			} else {
+				k, query = query[:i], query[i+1:]
+			}
+		} else {
+			query = []byte{}
+		}
+		if len(query) == 0 {
+			continue
+		}
+		if i := bytes.IndexByte(query, sep); i >= 0 {
+			if i == 0 {
+				if len(query) < 2 {
+					query = []byte{}
+				} else {
+					query = query[i+2:]
+				}
+			} else {
+				v, query = query[:i], query[i+1:]
+			}
+		} else {
+			v = query
+			query = []byte{}
+		}
+		var kInt, vInt uint64
+		if len(k) > 0 {
+			kInt = (&big.Int{}).SetBytes(k).Uint64()
+		}
+		if len(v) > 0 {
+			vInt = (&big.Int{}).SetBytes(v).Uint64()
+		}
+		m[kInt] = vInt
+	}
+	return m
 }
 
 // machineId stores machine id generated once and used in subsequent calls
@@ -321,6 +405,11 @@ func (id ObjectID) byteSlice(start, end int) []byte {
 // String ObjectID to base64 string
 func (id ObjectID) String() string {
 	return base64.RawURLEncoding.EncodeToString(id)
+}
+
+// String ObjectID to base64 string
+func (id ObjectID) Bytes() []byte {
+	return []byte(id)
 }
 
 // ObjectIDFromString convert a string to objectID
