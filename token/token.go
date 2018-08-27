@@ -14,7 +14,6 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"reflect"
 	"sync/atomic"
 	"time"
 )
@@ -54,6 +53,34 @@ func (e *Encoding) Encode(userID int64, meta interface{}, expires time.Time) str
 	return base64.RawURLEncoding.EncodeToString(e.encodeBytes(userID, meta, expires))
 }
 
+// UnionID encode a interface to bytes
+func (e *Encoding) UnionID(src []uint64) string {
+	dst := intArrayToBytes(src)
+	if !e.withSecret {
+		dst = append([]byte{0}, dst...)
+		return base64.RawURLEncoding.EncodeToString(dst)
+	}
+	enc := make([]byte, len(dst))
+	e.encoder.XORKeyStream(enc, dst)
+	enc = append([]byte{0}, enc...)
+	return base64.RawURLEncoding.EncodeToString(enc)
+}
+
+//FromUnionID convert interface to union id
+func (e *Encoding) FromUnionID(src string) ([]uint64, error) {
+	dst, err := base64.RawURLEncoding.DecodeString(src)
+	if err != nil {
+		return nil, err
+	}
+	dst = dst[1:]
+	if e.withSecret {
+		src := make([]byte, len(dst))
+		e.dconder.XORKeyStream(src, dst)
+		dst = src
+	}
+	return bytesToIntArray(dst), nil
+}
+
 // Decode decode a string to token info
 func (e *Encoding) Decode(s string) (userID int64, meta interface{}, expires time.Time, err error) {
 	var dst []byte
@@ -88,9 +115,9 @@ func (e *Encoding) encodeBytes(userID int64, meta interface{}, expires time.Time
 		src[start+i] = v
 	}
 	if meta != nil {
-		b := interfaceToBytes(meta)
-		if len(b) < 1 {
-			panic(fmt.Sprintf("meta type %s unspport", reflect.TypeOf(meta)))
+		b, err := interfaceToBytes(meta)
+		if err != nil {
+			panic(err)
 		}
 		src = append(src, b...)
 	}
@@ -121,9 +148,9 @@ func (e *Encoding) decodeBytes(dst []byte) (userID int64, meta interface{}, expi
 	objectID := ObjectID(dst[0:12])
 	expires = objectID.Time()
 	number := dst[12:17]
-	var bigNubmer = big.Int{}
-	bigNubmer.SetBytes(number)
-	userID = bigNubmer.Int64()
+	var bigNumber = big.Int{}
+	bigNumber.SetBytes(number)
+	userID = bigNumber.Int64()
 	meta = bytesToInterface(dst[17:])
 	return
 }
@@ -139,7 +166,7 @@ const (
 	idTypeBase64String byte = 7
 )
 
-func interfaceToBytes(src interface{}) (dst []byte) {
+func interfaceToBytes(src interface{}) (dst []byte, err error) {
 	switch s := src.(type) {
 	case int64:
 		dst = append(dst, idTypeInt64)
@@ -166,17 +193,12 @@ func interfaceToBytes(src interface{}) (dst []byte) {
 		dst = append(dst, intMapToBytes(s)...)
 	case []uint64:
 		dst = append(dst, idTypeIntArray)
-		for _, v := range s {
-			if len(dst) > 1 {
-				dst = append(dst, 255)
-			}
-			dst = append(dst, intToBytes(v, 254)...)
-		}
+		dst = append(dst, intArrayToBytes(s)...)
 	case map[string]string:
 		dst = append(dst, idTypeMap)
 		dst = append(dst, strMapToBytes(s)...)
 	default:
-
+		return nil, fmt.Errorf("meta type %s unspport", s)
 	}
 	return
 }
@@ -204,25 +226,37 @@ func bytesToInterface(dst []byte) (src interface{}) {
 	case idTypeIntMap:
 		src = bytesToIntMap(dst[1:])
 	case idTypeIntArray:
-		var numbers []uint64
-		b := dst[1:]
-		for len(b) > 0 {
-			m := bytes.IndexByte(b, 255)
-			if m < 0 {
-				numbers = append(numbers, bytesToInt(b, 254))
-				break
-			}
-			n := b[0:m]
-			numbers = append(numbers, bytesToInt(n, 254))
-			b = b[m+1:]
-		}
-		src = numbers
+		src = bytesToIntArray(dst[1:])
 	case idTypeMap:
 		src = bytesToStrMap(dst[1:])
 	}
 	return
 }
 
+func intArrayToBytes(src []uint64) (dst []byte) {
+	for _, v := range src {
+		if len(dst) > 1 {
+			dst = append(dst, 255)
+		}
+		dst = append(dst, intToBytes(v, 254)...)
+	}
+	return
+}
+
+func bytesToIntArray(b []byte) []uint64 {
+	var numbers []uint64
+	for len(b) > 0 {
+		m := bytes.IndexByte(b, 255)
+		if m < 0 {
+			numbers = append(numbers, bytesToInt(b, 254))
+			break
+		}
+		n := b[0:m]
+		numbers = append(numbers, bytesToInt(n, 254))
+		b = b[m+1:]
+	}
+	return numbers
+}
 func intMapToBytes(m map[uint64]uint64) []byte {
 	if len(m) == 0 {
 		return nil
