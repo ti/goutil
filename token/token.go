@@ -50,7 +50,7 @@ type Encoding struct {
 // Encode encode a token to a string
 // meta type is better fo int64, int, string and []byte, you can use map[string][]string
 func (e *Encoding) Encode(userID int64, meta interface{}, expires time.Time) string {
-	return base64.RawURLEncoding.EncodeToString(e.encodeBytes(userID, meta, expires))
+	return base64.RawURLEncoding.EncodeToString(e.EncodeBytes(userID, meta, expires))
 }
 
 // UnionID encode a interface to bytes
@@ -88,7 +88,7 @@ func (e *Encoding) Decode(s string) (userID int64, meta interface{}, expires tim
 	if err != nil {
 		return
 	}
-	return e.decodeBytes(dst)
+	return e.DecodeBytes(dst)
 }
 
 //encodeBytes encode info to byetes
@@ -100,7 +100,7 @@ func (e *Encoding) Decode(s string) (userID int64, meta interface{}, expires tim
 
    t is the type of meta
 */
-func (e *Encoding) encodeBytes(userID int64, meta interface{}, expires time.Time) []byte {
+func (e *Encoding) EncodeBytes(userID int64, meta interface{}, expires time.Time) []byte {
 	src := make([]byte, 17)
 	user := big.NewInt(userID).Bytes()
 	if len(user) > 5 {
@@ -132,7 +132,7 @@ func (e *Encoding) encodeBytes(userID int64, meta interface{}, expires time.Time
 	return dst
 }
 
-func (e *Encoding) decodeBytes(dst []byte) (userID int64, meta interface{}, expires time.Time, err error) {
+func (e *Encoding) DecodeBytes(dst []byte) (userID int64, meta interface{}, expires time.Time, err error) {
 	if dst[0] != 0 {
 		err = errors.New("invalidate token version")
 	}
