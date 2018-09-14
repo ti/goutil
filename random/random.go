@@ -2,7 +2,6 @@ package random
 
 import (
 	"io"
-	"strings"
 	"encoding/base64"
 	"crypto/rand"
 	mathrand "math/rand"
@@ -31,7 +30,7 @@ func NewRandomByte(len int) []byte {
 
 //NewRandomStringLen make any len RandomString, len must > 16
 func NewRandomStringLen(len int) string {
-	return strings.TrimRight(base64.URLEncoding.EncodeToString(NewRandomByte(len)), "=")
+	return base64.RawURLEncoding.EncodeToString(NewRandomByte(len))
 }
 
 func NewRandomInt(min, max int) int {
