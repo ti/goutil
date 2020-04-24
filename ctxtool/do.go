@@ -1,15 +1,22 @@
-import "context"
+package ctxtool
+
+import (
+	"context"
+)
 
 // DoWithContext add context to function
 func DoWithContext(ctx context.Context, do func(ctx context.Context) error, fallback func(err error)) (err error) {
 	errorChannel := make(chan error)
-	var contextHasBeenDone bool
+	var contextHasBeenDone = false
 	go func() {
 		err := do(ctx)
-		errorChannel <- err
-		if contextHasBeenDone && fallback != nil {
-			fallback(err)
+		if contextHasBeenDone {
+			if fallback != nil {
+				fallback(err)
+			}
+			return
 		}
+		errorChannel <- err
 	}()
 	select {
 	case err = <-errorChannel:
