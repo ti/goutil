@@ -25,7 +25,7 @@ func TestDoWithContext(t *testing.T) {
 		fnCallbackError = err
 	})
 
-	if err != context.DeadlineExceeded {
+	if !(err == context.DeadlineExceeded || err == context.Canceled) {
 		t.Fatal()
 	}
 	// catch the fn callback error
